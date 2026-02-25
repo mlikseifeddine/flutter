@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/cie_auth_service.dart';
 
@@ -21,6 +22,9 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
   bool _isLoading = true;
   double _loadingProgress = 0;
   String _currentUrl = '';
+  
+  // MethodChannel per comunicare con il codice nativo
+  static const MethodChannel _channel = MethodChannel('cie_login_flutter/cie_auth');
 
   String get _spUrl => widget.serviceProviderUrl ?? CieConfig.currentSpUrl;
 
@@ -28,6 +32,32 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
   void initState() {
     super.initState();
     _initWebView();
+    _setupCieIdCallbackListener(); // 👈 Aggiunto: ascolta il callback da CieID
+  }
+
+  /// Configura il listener per ricevere il callback da CieID
+  void _setupCieIdCallbackListener() {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onCieIdCallback') {
+        // Ricevuto callback da CieID!
+        final args = call.arguments as Map<dynamic, dynamic>?;
+        final callbackUrl = args?['url'] as String?;
+        
+        debugPrint('📲 Received CieID callback: $callbackUrl');
+        
+        if (callbackUrl != null && mounted) {
+          // Ricarica l'URL nella WebView
+          await _controller.loadRequest(Uri.parse(callbackUrl));
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Rimuovi il handler quando la schermata viene chiusa
+    _channel.setMethodCallHandler(null);
+    super.dispose();
   }
 
   void _initWebView() {
@@ -68,7 +98,6 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
     debugPrint('🔗 Navigation request: $url');
 
     // 1. Prima controlla se è un URL per aprire l'app CieID
-    //    Questo succede su DISPOSITIVO FISICO quando l'utente clicca "Entra con CIE"
     if (_shouldOpenCieIdApp(url)) {
       debugPrint('📱 Intercepted CieID app URL');
       _openCieIdApp(url);
@@ -82,16 +111,12 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
       return NavigationDecision.prevent;
     }
 
-    // 3. Altrimenti lascia navigare normalmente (mostra la pagina)
+    // 3. Altrimenti lascia navigare normalmente
     return NavigationDecision.navigate;
   }
 
   /// Determina se l'URL deve aprire l'app CieID
-  /// Questo URL viene generato dal server CIE quando l'utente clicca "Entra con CIE"
   bool _shouldOpenCieIdApp(String url) {
-    // Pattern specifici che indicano "apri l'app CieID"
-    // Questi URL vengono generati SOLO quando serve l'app CieID
-    
     final urlLower = url.toLowerCase();
     
     // Schema URL diretto per CieID
@@ -114,9 +139,6 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
 
   /// Determina se l'URL è il callback finale dopo autenticazione riuscita
   bool _isAuthenticationCallback(String url) {
-    // Il callback finale arriva dal TUO Service Provider (demo.ecivis.it)
-    // NON dal server CIE (preproduzione.oidc.idserver...)
-    
     // Ignora tutte le pagine del server CIE - non sono callback
     if (url.contains('idserver.servizicie.interno.gov.it')) {
       return false;
@@ -124,9 +146,6 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
     if (url.contains('preproduzione')) {
       return false;
     }
-    
-    // Il vero callback è quando il Service Provider riceve il codice di autorizzazione
-    // e redirige l'utente alla pagina di successo
     
     // Callback OIDC standard: redirect_uri con code=
     if (url.contains('demo.ecivis.it') && url.contains('code=')) {
@@ -154,7 +173,6 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
 
     final userData = <String, dynamic>{};
 
-    // Estrai tutti i parametri utili
     final possibleParams = [
       'code', 'token', 'access_token', 'id_token',
       'fiscal_code', 'fiscalCode', 'cf',
@@ -182,18 +200,15 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
   Future<void> _openCieIdApp(String url) async {
     debugPrint('📱 Opening CieID app with URL: $url');
 
-    // Verifica se CieID è installata
     final isInstalled = await CieAuthService.isCieIdAppInstalled();
 
     if (!isInstalled) {
-      // CieID non installata (normale su emulatore)
       if (mounted) {
         _showCieIdNotAvailableDialog();
       }
       return;
     }
 
-    // Mostra dialog di conferma
     final shouldContinue = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -242,7 +257,6 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
 
     if (shouldContinue != true) return;
 
-    // Apri l'app CieID
     final opened = await CieAuthService.openCieIdApp(url);
 
     if (!opened && mounted) {

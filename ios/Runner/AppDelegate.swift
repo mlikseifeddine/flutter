@@ -7,18 +7,23 @@ import Flutter
     private let CHANNEL = "cie_login_flutter/cie_auth"
     private let NOTIFICATION_NAME = "RETURN_FROM_CIEID"
     
+    // Riferimento al MethodChannel per inviare callback a Flutter
+    private var methodChannel: FlutterMethodChannel?
+    
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         
         let controller = window?.rootViewController as! FlutterViewController
-        let cieChannel = FlutterMethodChannel(
+        
+        // Crea il MethodChannel
+        methodChannel = FlutterMethodChannel(
             name: CHANNEL,
             binaryMessenger: controller.binaryMessenger
         )
         
-        cieChannel.setMethodCallHandler { [weak self] (call, result) in
+        methodChannel?.setMethodCallHandler { [weak self] (call, result) in
             switch call.method {
             case "isCieIdInstalled":
                 result(self?.isCieIdInstalled() ?? false)
@@ -46,7 +51,9 @@ import Flutter
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
     
-    // Gestisce l'apertura dell'app tramite URL Scheme
+    // MARK: - Gestione URL Scheme (ritorno da CieID)
+    
+    // Per iOS 9-12
     override func application(
         _ app: UIApplication,
         open url: URL,
@@ -55,6 +62,20 @@ import Flutter
         handleCieIdCallback(url: url)
         return true
     }
+    
+    // Per iOS 13+ con SceneDelegate (se non usi SceneDelegate)
+    override func application(
+        _ application: UIApplication,
+        continue userActivity: NSUserActivity,
+        restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+    ) -> Bool {
+        if let url = userActivity.webpageURL {
+            handleCieIdCallback(url: url)
+        }
+        return true
+    }
+    
+    // MARK: - Metodi CieID
     
     /// Verifica se l'app CieID è installata
     private func isCieIdInstalled() -> Bool {
@@ -85,14 +106,20 @@ import Flutter
         }
     }
     
-    /// Gestisce il callback dall'app CieID
+    /// Gestisce il callback dall'app CieID e lo invia a Flutter
     private func handleCieIdCallback(url: URL) {
         var urlString = url.absoluteString
         
+        // Cerca https:// nell'URL
         if let httpsRange = urlString.range(of: "https://") {
+            // Rimuove il prefisso dell'URL Scheme
             let startPos = urlString.distance(from: urlString.startIndex, to: httpsRange.lowerBound)
             urlString = String(urlString.dropFirst(startPos))
             
+            // Invia il callback a Flutter! 👈 IMPORTANTE
+            methodChannel?.invokeMethod("onCieIdCallback", arguments: ["url": urlString])
+            
+            // Invia anche la notifica (per compatibilità)
             let response: [String: String] = ["payload": urlString]
             NotificationCenter.default.post(
                 name: Notification.Name(NOTIFICATION_NAME),
