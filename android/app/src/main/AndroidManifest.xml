@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.cie_login_flutter">
+
+    <!-- Permessi necessari -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.NFC" />
+    
+    <!-- Query per verificare se CieID è installata (Android 11+) -->
+    <queries>
+        <package android:name="it.ipzs.cieid" />
+        <package android:name="it.ipzs.cieid.coll" />
+    </queries>
+
+    <application
+        android:label="Login CIE"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="false">
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            
+            <!-- Intent filter per l'avvio normale -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            
+            <!-- Intent filter per il callback da CieID -->
+            <!-- Sostituisci "com.example.cie_login_flutter" con il tuo package name -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                
+                <!-- Deep link per il callback -->
+                <data
+                    android:scheme="com.example.cie_login_flutter"
+                    android:host="callback" />
+            </intent-filter>
+            
+        </activity>
+        
+        <!-- Meta-data per Flutter -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+            
+    </application>
+</manifest>
