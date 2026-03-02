@@ -3,18 +3,18 @@ package com.example.cie_login_flutter
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "cie_login_flutter/cie_auth"
+    private val TAG = "CieLogin"
     
     // Package dell'app CieID
     private val CIE_ID_PACKAGE = "it.ipzs.cieid"
     private val CIE_ID_PACKAGE_TEST = "it.ipzs.cieid.coll"
-    private val CIE_ID_CLASS_NAME = "it.ipzs.cieid.BaseActivity"
-    
     // URL key per il ritorno da CieID
     private val URL_KEY = "URL"
     
@@ -49,17 +49,15 @@ class MainActivity : FlutterActivity() {
      * Verifica se l'app CieID è installata
      */
     private fun isCieIdInstalled(): Boolean {
+        return isPackageInstalled(CIE_ID_PACKAGE) || isPackageInstalled(CIE_ID_PACKAGE_TEST)
+    }
+
+    private fun isPackageInstalled(packageName: String): Boolean {
         return try {
-            packageManager.getPackageInfo(CIE_ID_PACKAGE, 0)
+            packageManager.getPackageInfo(packageName, 0)
             true
         } catch (e: Exception) {
-            // Prova con l'app di collaudo
-            try {
-                packageManager.getPackageInfo(CIE_ID_PACKAGE_TEST, 0)
-                true
-            } catch (e: Exception) {
-                false
-            }
+            false
         }
     }
     
@@ -67,26 +65,48 @@ class MainActivity : FlutterActivity() {
      * Apre l'app CieID con l'URL specificato
      */
     private fun openCieIdApp(url: String): Boolean {
-        val intent = Intent()
-        
+        Log.d(TAG, "Opening CieID with URL: $url")
+
+        if (url.startsWith("intent://")) {
+            return openIntentUrl(url)
+        }
+
+        val appUrl = Uri.parse(url)
+
         return try {
-            // Prova prima con l'app di produzione
-            intent.setClassName(CIE_ID_PACKAGE, CIE_ID_CLASS_NAME)
-            intent.data = Uri.parse(url)
-            intent.action = Intent.ACTION_VIEW
+            val genericIntent = Intent(Intent.ACTION_VIEW, appUrl).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            if (genericIntent.resolveActivity(packageManager) != null) {
+                startActivityForResult(genericIntent, 0)
+                true
+            } else {
+                Log.e(TAG, "No activity found for URL: $url")
+                false
+            }
+        } catch (e: ActivityNotFoundException) {
+            Log.e(TAG, "No handler for URL: $url", e)
+            false
+        }
+    }
+
+    private fun openIntentUrl(url: String): Boolean {
+        return try {
+            val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+                component = null
+                selector = null
+            }
+
             startActivityForResult(intent, 0)
             true
         } catch (e: ActivityNotFoundException) {
-            // Prova con l'app di collaudo
-            try {
-                intent.setClassName(CIE_ID_PACKAGE_TEST, CIE_ID_CLASS_NAME)
-                intent.data = Uri.parse(url)
-                intent.action = Intent.ACTION_VIEW
-                startActivityForResult(intent, 0)
-                true
-            } catch (e: ActivityNotFoundException) {
-                false
-            }
+            Log.e(TAG, "CieID app not found for intent URL", e)
+            false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing intent URL", e)
+            false
         }
     }
     

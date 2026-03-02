@@ -124,10 +124,9 @@ class _CieWebViewScreenState extends State<CieWebViewScreen> {
       return true;
     }
     
-    // URL con /OpenApp indica che il server vuole aprire l'app CieID
-    if (url.contains('/OpenApp')) {
-      return true;
-    }
+    // Nota: non intercettiamo direttamente URL HTTPS tipo /OpenApp.
+    // Quelle pagine spesso preparano un redirect JS verso cieid:// o intent://.
+    // Se bloccate qui, il flusso può restare bloccato nella WebView.
     
     // URL intent Android per CieID
     if (url.contains('intent://') && url.contains('it.ipzs.cieid')) {
