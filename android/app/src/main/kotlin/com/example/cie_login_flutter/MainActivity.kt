@@ -49,9 +49,15 @@ class MainActivity : FlutterActivity() {
      * Verifica se l'app CieID è installata
      */
     private fun isCieIdInstalled(): Boolean {
-        val installedPackages = listOf(CIE_ID_PACKAGE, CIE_ID_PACKAGE_TEST)
-        return installedPackages.any { packageName ->
-            packageManager.getLaunchIntentForPackage(packageName) != null
+        return isPackageInstalled(CIE_ID_PACKAGE) || isPackageInstalled(CIE_ID_PACKAGE_TEST)
+    }
+
+    private fun isPackageInstalled(packageName: String): Boolean {
+        return try {
+            packageManager.getPackageInfo(packageName, 0)
+            true
+        } catch (e: Exception) {
+            false
         }
     }
     
@@ -66,23 +72,19 @@ class MainActivity : FlutterActivity() {
         }
 
         val appUrl = Uri.parse(url)
-        val packages = listOf(CIE_ID_PACKAGE, CIE_ID_PACKAGE_TEST)
 
-        packages.forEach { packageName ->
-            val intent = Intent(Intent.ACTION_VIEW, appUrl).apply {
-                setPackage(packageName)
+        return try {
+            val genericIntent = Intent(Intent.ACTION_VIEW, appUrl).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
 
-            if (intent.resolveActivity(packageManager) != null) {
-                startActivityForResult(intent, 0)
-                return true
+            if (genericIntent.resolveActivity(packageManager) != null) {
+                startActivityForResult(genericIntent, 0)
+                true
+            } else {
+                Log.e(TAG, "No activity found for URL: $url")
+                false
             }
-        }
-
-        return try {
-            startActivity(Intent(Intent.ACTION_VIEW, appUrl))
-            true
         } catch (e: ActivityNotFoundException) {
             Log.e(TAG, "No handler for URL: $url", e)
             false
